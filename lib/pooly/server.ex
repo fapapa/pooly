@@ -3,7 +3,7 @@ defmodule Pooly.Server do
   import Supervisor.Spec
 
   defmodule State do
-    defstruct sup: nil, mfa: nil, size: nil
+    defstruct sup: nil, worker_sup: nil, monitors: nil, size: nil, workers: nil, mfa: nil
   end
 
   #######
@@ -37,5 +37,20 @@ defmodule Pooly.Server do
   def init([], state) do
     send(self, :start_worker_supervisor)
     {:ok, state}
+  end
+
+  def handle_info(:start_worker_supervisor, state = %{sup: sup, mfa: mfa, size: size}) do
+    {:ok, worker_sup} = Supervisor.start_child(sup, supervisor_spec(mfa))
+    workers = prepopulate(size, worker_sup)
+    {:no_reply, %{state | worker_sup: worker_sup, workers: workers}}
+  end
+
+  #####################
+  # Private Functions #
+  #####################
+
+  defp supervisor_spec(mfa) do
+    opts = [restart: :temporary]
+    supervisor(Pooly.WorkerSupervisor, [mfa], opts)
   end
 end
