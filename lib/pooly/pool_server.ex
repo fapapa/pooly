@@ -102,12 +102,13 @@ defmodule Pooly.PoolServer do
     {:reply, {length(workers), :ets.info(monitors, :size)}, state}
   end
 
-  def handle_cast({:checkin, worker}, %{workers: workers, monitors: monitors} = state) do
+  def handle_cast({:checkin, worker}, %{monitors: monitors} = state) do
     case :ets.lookup(monitors, worker) do
       [{pid, ref}] ->
         true = Process.demonitor(ref)
         true = :ets.delete(monitors, pid)
-        {:noreply, %{state | workers: [pid | workers]}}
+        new_state = handle_checkin(pid, state)
+        {:noreply, new_state}
 
       [] ->
         {:noreply, state}
@@ -192,5 +193,26 @@ defmodule Pooly.PoolServer do
   defp supervisor_spec(name, mfa) do
     opts = [id: name <> "WorkerSupervisor", restart: :temporary]
     supervisor(Pooly.WorkerSupervisor, [self, mfa], opts)
+  end
+
+  defp handle_checkin(pid, state) do
+    %{
+      worker_sup: worker_sup,
+      workers: workers,
+      monitors: monitors,
+      overflow: overflow
+    } = state
+
+    if overflow < 0 do
+      :ok = dismiss_worker(worker_sup, pid)
+      %{state | waiting: empty, overflow: overflow - 1}
+    else
+      %{state | waiting: empty, workers: [pid | workers], overflow: 0}
+    end
+  end
+
+  defp dismiss_worker(sup, pid) do
+    true = Process.unlink(pid)
+    Supervisor.terminate_child(sup, pid)
   end
 end
