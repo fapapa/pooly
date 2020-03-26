@@ -19,7 +19,7 @@ defmodule Pooly.Server do
   end
 
   def status(pool_name) do
-    GenServer.call(:"#{pool_name}", :status)
+    GenServer.call(:"#{pool_name}Server", :status)
   end
 
   #############
@@ -29,7 +29,7 @@ defmodule Pooly.Server do
   def init(pools_config) do
     pools_config
     |> Enum.each(fn pool_config ->
-      send(self, {start_pool, pool_config})
+      send(self, {:start_pool, pool_config})
     end)
 
     {:ok, pools_config}
@@ -45,7 +45,7 @@ defmodule Pooly.Server do
   #####################
 
   defp supervisor_spec(pool_config) do
-    opts = [:id, :"#{pool_config[:name]}Supervisor"]
+    opts = [id: :"#{pool_config[:name]}Supervisor"]
     supervisor(Pooly.PoolSupervisor, [pool_config], opts)
   end
 end
